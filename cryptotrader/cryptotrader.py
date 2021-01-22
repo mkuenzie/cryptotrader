@@ -42,6 +42,7 @@ class Cryptotrader(object):
         return {'BUY': buy_price, 'SELL': sell_price}
 
     def test(self, action='BUY'):
+        wallet = 100
         steps = len(self.market_data.index)
         curr_tick = self.market_start + (30 * self.interval)
         curr_action = action
