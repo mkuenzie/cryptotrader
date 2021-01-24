@@ -42,7 +42,8 @@ class Cryptotrader(object):
         return {'BUY': buy_price, 'SELL': sell_price}
 
     def test(self, action='BUY'):
-        wallet = 100
+        usd_wallet = 100
+        crypto_wallet = 0
         steps = len(self.market_data.index)
         curr_tick = self.market_start + (30 * self.interval)
         curr_action = action
@@ -55,14 +56,20 @@ class Cryptotrader(object):
             if curr_action == 'BUY':
                 buy_price = self.strategy.enter(sliced_data, tick_data.close.item())
                 if tick_low <= buy_price <= tick_high:
+                    crypto_wallet = round(usd_wallet/buy_price, 6)
+                    commission = round(usd_wallet * self.fee, 2)
+                    usd_wallet = 0
                     trades.append({'timestamp': curr_tick, 'action': curr_action,
-                                   'price': buy_price, 'fee': (buy_price * self.fee)})
+                                   'price': buy_price, 'amount': crypto_wallet, 'fee': commission})
                     curr_action = 'SELL'
             else:
                 sell_price = self.strategy.exit(sliced_data, tick_data.close.item())
                 if tick_low <= sell_price <= tick_high:
+                    commission = round(crypto_wallet * sell_price * self.fee, 2)
                     trades.append({'timestamp': curr_tick, 'action': curr_action,
-                                   'price': sell_price, 'fee': (sell_price * self.fee)})
+                                   'price': sell_price,  'amount': crypto_wallet, 'fee': commission})
+                    usd_wallet = round(crypto_wallet * sell_price, 2)
+                    crypto_wallet = 0
                     curr_action = 'BUY'
             curr_tick = curr_tick + self.interval
         return trades

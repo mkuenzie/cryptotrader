@@ -1,8 +1,8 @@
 from cryptotrader.cryptotrader import Cryptotrader
 from cryptotrader.strategy import Strategy, BbandsStrategy
 from datetime import timedelta
-from unittest import TestCase
 import csv
+
 
 def generate_markdown(trades, initial_wallet, wallet):
     total = len(trades)
@@ -38,29 +38,6 @@ def generate_markdown(trades, initial_wallet, wallet):
             markdown_text += ('- %.2f' % loss) + " |\n"
     return markdown_text
 
-
-trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.01), fee=0.0025, interval=timedelta(hours=1))
-trades = trader.test()
-total = len(trades)
-
-wallet = 100
-for i in range(0, total-2, 2):
-    buy = trades[i]
-    sell = trades[i+1]
-    buy_price = buy['price']
-    sell_price = sell['price']
-    if buy_price <= sell_price:
-        gain = ((sell_price / buy_price) - 1) * 100
-        wallet = wallet + (wallet * (gain/100))
-        print(trades[i+1]['timestamp'])
-        print('+ %.2f %%' % gain)
-    else:
-        loss = (1 - (sell_price / buy_price)) * 100
-        wallet = wallet - (wallet * (loss/100))
-        print(trades[i + 1]['timestamp'])
-        print('- %.2f %%' % loss)
-
-print(wallet)
 def write_csv(trades):
     csv_columns = list(trades[0].keys())
     csv_file = 'trades.csv'
@@ -68,9 +45,21 @@ def write_csv(trades):
         with open(csv_file, 'w') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
             writer.writeheader()
-            for data in trades:
-                writer.writerow(data)
+            for trade in trades:
+                for data in trade:
+                    writer.writerow(data)
     except IOError:
         print("I/O error")
 
-write_csv(trades)
+
+initial_wallet = 50
+wallet = initial_wallet
+trades = []
+
+trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.1), fee=0.0035, interval=timedelta(hours=1))
+
+
+mdfile = generate_markdown(trades, initial_wallet=initial_wallet, wallet=round(wallet,2))
+F = open('readme.md', 'w')
+F.write(mdfile)
+F.close()
