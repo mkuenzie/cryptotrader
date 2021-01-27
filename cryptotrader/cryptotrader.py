@@ -13,11 +13,14 @@ class Cryptotrader(object):
         self.market_data = pd.DataFrame()
         self.market_start = datetime.now()
         self.strategy = strategy
-        self.ticker = 0
+        self.ticker = {'lastTradeRate': 0}
         self.interval = interval
         self.refresh()
         self.action = action
         self.fee = fee
+
+    def get_ticker(self):
+        return float((self.ticker['lastTradeRate']))
 
     def refresh(self):
         self.ticker = self.exchange.markets_ticker(self.market)
@@ -37,8 +40,8 @@ class Cryptotrader(object):
         self.market_data = self.market_data.append(df)
 
     def eval(self):
-        buy_price = self.strategy.enter(self.market_data)
-        sell_price = self.strategy.exit(self.marker_data)
+        buy_price = self.strategy.enter(self.market_data, self.get_ticker())
+        sell_price = self.strategy.exit(self.market_data, self.get_ticker())
         return {'BUY': buy_price, 'SELL': sell_price}
 
     def test(self, action='BUY'):
@@ -74,6 +77,12 @@ class Cryptotrader(object):
             curr_tick = curr_tick + self.interval
         return trades
 
+    def strike(self, action, quantity):
+        if action == 'BUY':
+            return self.exchange.buy(self.market, quantity)
+        if action == 'SELL':
+            return self.exchange.sell(self.market, quantity)
+        raise ValueError('Invalid value for action')
 
 
 

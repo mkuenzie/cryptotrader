@@ -41,6 +41,7 @@ def generate_markdown(trades, initial_wallet, wallet):
 
 trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.01), fee=0.0025, interval=timedelta(hours=1))
 trades = trader.test()
+trader.ticker()
 total = len(trades)
 
 wallet = 100

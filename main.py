@@ -1,13 +1,27 @@
 from cryptotrader.cryptotrader import Cryptotrader
-from cryptotrader.strategy import Strategy, BbandsStrategy
-from datetime import timedelta
+from cryptotrader.strategy import BbandsStrategy
+from datetime import timedelta, datetime
+import daemon
 import csv
+import time
+
+initial_wallet = 50
+usd_wallet = 0
+crypto_wallet = 0.00157491
+trades = []
+action = 'SELL'
+
+trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.1), fee=0.0035, interval=timedelta(hours=1))
 
 
-def generate_markdown(trades, initial_wallet, wallet):
+def generate_markdown():
     total = len(trades)
     markdown_text = "# Cryptotrader Stats\n\n"
     markdown_text += "Initial Wallet: $" + str(initial_wallet) + "\n"
+    if usd_wallet == 0:
+        wallet = round(crypto_wallet * trader.get_ticker(), 2)
+    else:
+        wallet = round(usd_wallet, 2)
     markdown_text += "Current Wallet: $" + str(wallet) + "\n\n"
     markdown_text += "Gain/Loss: "
     if wallet >= initial_wallet:
@@ -38,28 +52,95 @@ def generate_markdown(trades, initial_wallet, wallet):
             markdown_text += ('- %.2f' % loss) + " |\n"
     return markdown_text
 
-def write_csv(trades):
+
+def write_csv():
     csv_columns = list(trades[0].keys())
     csv_file = 'trades.csv'
     try:
-        with open(csv_file, 'w') as csvfile:
+        with open(csv_file, 'wb') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
             writer.writeheader()
             for trade in trades:
                 for data in trade:
                     writer.writerow(data)
+        csvfile.close()
     except IOError:
         print("I/O error")
 
 
-initial_wallet = 50
-wallet = initial_wallet
-trades = []
+def write_markdown():
+    mdfile = generate_markdown()
+    f = open('readme.md', 'w')
+    f.write(mdfile)
+    f.close()
 
-trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.1), fee=0.0035, interval=timedelta(hours=1))
+
+def trade():
+    while True:
+        global usd_wallet, crypto_wallet, action
+        trader.refresh()
+        ticker = trader.get_ticker()
+        plan = trader.eval()
+        now = datetime.now()
+        print("---------" + str(now) + "------------")
+        print("Looking to " + action)
+        print("Current Ticker:")
+        print(ticker)
+        print("Strategy Plan:")
+        print(plan)
+        buy_price = plan['BUY']
+        sell_price = plan['SELL']
+        if ticker <= buy_price and action == 'BUY':
+            quantity = round((usd_wallet / ticker), 8)
+            order = trader.strike(action, quantity)
+            fill_quantity = float(order['fillQuantity'])
+            proceeds = float(order['proceeds'])
+            fee = float(order['commission'])
+            price = round(proceeds / fill_quantity, 2)
+            trade = {
+                'price': price,
+                'amount': fill_quantity,
+                'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
+                'fee': fee,
+                'action': action
+            }
+            print(trade)
+            trades.append(trade)
+            usd_wallet = 0
+            crypto_wallet = fill_quantity
+            action = 'SELL'
+        if ticker >= sell_price and action == 'SELL':
+            quantity = crypto_wallet
+            order = trader.strike(action, quantity)
+            fill_quantity = float(order['fillQuantity'])
+            proceeds = float(order['proceeds'])
+            fee = float(order['commission'])
+            price = round(proceeds / fill_quantity, 2)
+            trade = {
+                'price': price,
+                'amount': fill_quantity,
+                'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
+                'fee': fee,
+                'action': action
+            }
+            print(trade)
+            trades.append(trade)
+            usd_wallet = fill_quantity
+            crypto_wallet = 0
+            action = 'BUY'
+        write_markdown()
+        if len(trades) > 0:
+            write_csv()
+        print("Wait 1 min...")
+        time.sleep(60)
 
 
-mdfile = generate_markdown(trades, initial_wallet=initial_wallet, wallet=round(wallet,2))
-F = open('readme.md', 'w')
-F.write(mdfile)
-F.close()
+def run():
+    with daemon.DaemonContext():
+        trade()
+
+
+if __name__ == "__main__":
+    trade()
+
+
