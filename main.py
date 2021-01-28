@@ -1,5 +1,5 @@
 from cryptotrader.cryptotrader import Cryptotrader
-from cryptotrader.strategy import BbandsStrategy
+from cryptotrader.strategy import BbandsStrategy, BbandsStrategy2, BbandsStrategy3
 from datetime import timedelta, datetime
 import daemon
 from csv import DictWriter
@@ -11,7 +11,7 @@ crypto_wallet = 0
 trades = []
 action = 'BUY'
 
-trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.01), fee=0.0035, interval=timedelta(hours=1))
+trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy3(proximity=0.25, stddevs=2), fee=0.0035, interval=timedelta(hours=1))
 
 
 def generate_markdown():
