@@ -15,14 +15,19 @@ class Cryptotrader(object):
         self.strategy = strategy
         self.ticker = {'lastTradeRate': 0}
         self.interval = interval
-        self.refresh()
         self.action = action
         self.fee = fee
+        self.refresh()
 
     def get_ticker(self):
         return float((self.ticker['lastTradeRate']))
 
     def refresh(self):
+        try:
+            self.exchange.ping()
+        except Exception as e:
+            print("Failed to refresh, exchange is unavailable.")
+            return False
         self.ticker = self.exchange.markets_ticker(self.market)
         market_data = self.exchange.markets_candle(self.market, self.interval)
         self.market_start = datetime.strptime((market_data[0])['startsAt'], '%Y-%m-%dT%H:%M:%SZ')
@@ -38,22 +43,27 @@ class Cryptotrader(object):
                         data[key].append(float(m_datum[key]))
         df = pd.DataFrame(data=data)
         self.market_data = self.market_data.append(df)
+        return True
 
     def eval(self):
         buy_price = self.strategy.enter(self.market_data, self.get_ticker())
         sell_price = self.strategy.exit(self.market_data, self.get_ticker())
         return {'BUY': buy_price, 'SELL': sell_price}
 
-    def test(self, action='BUY'):
+    def test(self, start_at=''):
         usd_wallet = 100
         crypto_wallet = 0
-        steps = len(self.market_data.index)
-        curr_tick = self.market_start + (30 * self.interval)
-        curr_action = action
+        if start_at == '':
+            test_data = self.market_data
+        else:
+            test_data = self.market_data.loc[self.market_data.startsAt >= start_at]
+        steps = len(test_data.index)
+        curr_tick = test_data.head(1).startsAt.item() + (30 * self.interval)
+        curr_action = 'BUY'
         trades = []
         for i in range(30, steps):
-            sliced_data = self.market_data.loc[self.market_data.startsAt <= curr_tick]
-            tick_data = self.market_data.loc[self.market_data.startsAt == curr_tick]
+            sliced_data = test_data.loc[test_data.startsAt <= curr_tick]
+            tick_data = test_data.loc[test_data.startsAt == curr_tick]
             tick_high = tick_data.high.item()
             tick_low = tick_data.low.item()
             if curr_action == 'BUY':
@@ -78,6 +88,11 @@ class Cryptotrader(object):
         return trades
 
     def strike(self, action, quantity):
+        try:
+            self.exchange.ping()
+        except Exception as e:
+            print("Failed to place order, exchange is unavailable.")
+            return None
         if action == 'BUY':
             return self.exchange.buy(self.market, quantity)
         if action == 'SELL':

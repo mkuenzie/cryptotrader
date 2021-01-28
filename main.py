@@ -2,16 +2,16 @@ from cryptotrader.cryptotrader import Cryptotrader
 from cryptotrader.strategy import BbandsStrategy
 from datetime import timedelta, datetime
 import daemon
-import csv
+from csv import DictWriter
 import time
 
 initial_wallet = 50
-usd_wallet = 0
-crypto_wallet = 0.00157491
+usd_wallet = 50
+crypto_wallet = 0
 trades = []
-action = 'SELL'
+action = 'BUY'
 
-trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.1), fee=0.0035, interval=timedelta(hours=1))
+trader = Cryptotrader(market='BTC-USD', strategy=BbandsStrategy(0.01), fee=0.0035, interval=timedelta(hours=1))
 
 
 def generate_markdown():
@@ -57,12 +57,10 @@ def write_csv():
     csv_columns = list(trades[0].keys())
     csv_file = 'trades.csv'
     try:
-        with open(csv_file, 'wb') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-            writer.writeheader()
+        with open(csv_file, 'a+', newline='') as csvfile:
+            dict_writer = DictWriter(csvfile, fieldnames=csv_columns)
             for trade in trades:
-                for data in trade:
-                    writer.writerow(data)
+                dict_writer.writerow(trade)
         csvfile.close()
     except IOError:
         print("I/O error")
@@ -78,59 +76,61 @@ def write_markdown():
 def trade():
     while True:
         global usd_wallet, crypto_wallet, action
-        trader.refresh()
-        ticker = trader.get_ticker()
-        plan = trader.eval()
-        now = datetime.now()
-        print("---------" + str(now) + "------------")
-        print("Looking to " + action)
-        print("Current Ticker:")
-        print(ticker)
-        print("Strategy Plan:")
-        print(plan)
-        buy_price = plan['BUY']
-        sell_price = plan['SELL']
-        if ticker <= buy_price and action == 'BUY':
-            quantity = round((usd_wallet / ticker), 8)
-            order = trader.strike(action, quantity)
-            fill_quantity = float(order['fillQuantity'])
-            proceeds = float(order['proceeds'])
-            fee = float(order['commission'])
-            price = round(proceeds / fill_quantity, 2)
-            trade = {
-                'price': price,
-                'amount': fill_quantity,
-                'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
-                'fee': fee,
-                'action': action
-            }
-            print(trade)
-            trades.append(trade)
-            usd_wallet = 0
-            crypto_wallet = fill_quantity
-            action = 'SELL'
-        if ticker >= sell_price and action == 'SELL':
-            quantity = crypto_wallet
-            order = trader.strike(action, quantity)
-            fill_quantity = float(order['fillQuantity'])
-            proceeds = float(order['proceeds'])
-            fee = float(order['commission'])
-            price = round(proceeds / fill_quantity, 2)
-            trade = {
-                'price': price,
-                'amount': fill_quantity,
-                'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
-                'fee': fee,
-                'action': action
-            }
-            print(trade)
-            trades.append(trade)
-            usd_wallet = fill_quantity
-            crypto_wallet = 0
-            action = 'BUY'
-        write_markdown()
-        if len(trades) > 0:
-            write_csv()
+        refresh_success = trader.refresh()
+        if refresh_success:
+            ticker = trader.get_ticker()
+            plan = trader.eval()
+            now = datetime.now()
+            print("---------" + str(now) + "------------")
+            print("Looking to " + action)
+            print("Current Ticker:")
+            print(ticker)
+            print("Strategy Plan:")
+            print(plan)
+            buy_price = plan['BUY']
+            sell_price = plan['SELL']
+            if ticker <= buy_price and action == 'BUY':
+                quantity = round((usd_wallet / ticker), 8)
+                order = trader.strike(action, quantity)
+                fill_quantity = float(order['fillQuantity'])
+                proceeds = float(order['proceeds'])
+                fee = float(order['commission'])
+                price = round(proceeds / fill_quantity, 2)
+                trade = {
+                    'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
+                    'action': action,
+                    'price': price,
+                    'amount': fill_quantity,
+                    'fee': fee
+                }
+                print(trade)
+                trades.append(trade)
+                usd_wallet = 0
+                crypto_wallet = fill_quantity
+                action = 'SELL'
+            if ticker >= sell_price and action == 'SELL':
+                quantity = crypto_wallet
+                order = trader.strike(action, quantity)
+                fill_quantity = float(order['fillQuantity'])
+                proceeds = float(order['proceeds'])
+                fee = float(order['commission'])
+                price = round(proceeds / fill_quantity, 2)
+                trade = {
+                    'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
+                    'action': action,
+                    'price': price,
+                    'amount': fill_quantity,
+                    'fee': fee
+                }
+                print(trade)
+                trades.append(trade)
+                usd_wallet = fill_quantity
+                crypto_wallet = 0
+                action = 'BUY'
+            write_markdown()
+            if len(trades) > 0:
+                write_csv()
+
         print("Wait 1 min...")
         time.sleep(60)
 

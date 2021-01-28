@@ -19,38 +19,59 @@ class BbandsStrategy(Strategy):
     #if trending up, buy near middle, sell near upper
     #if tending down buy near lower, sell near middle
     # 'near' is 5% of the difference between either upper/middle or middle/lower
+    def __init__(self, proximity=.05, stddevs=2):
+        self.proximity = proximity
+        self.stddevs = stddevs
+
+    def enter(self, market_data, ticker):
+        i = len(market_data) - 1
+        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3, timeperiod=14, \
+                                            nbdevup=self.stddevs, nbdevdn=self.stddevs)
+        plus_di = talib.PLUS_DI(market_data.high.values,
+                                market_data.low.values,
+                                market_data.close.values)
+        min_di = talib.MINUS_DI(market_data.high.values,
+                                market_data.low.values,
+                                market_data.close.values)
+        if plus_di[i] - min_di[i] > 5:
+            upper_spread = upper[i] - middle[i]
+            return round(middle[i] + (upper_spread * self.proximity),2)
+        else:
+            lower_spread = middle[i] - lower[i]
+            return round(lower[i] - (lower_spread * self.proximity),2)
+
+    def exit(self, market_data, ticker):
+        i = len(market_data) - 1
+        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3, timeperiod=14, \
+                                            nbdevup=self.stddevs, nbdevdn=self.stddevs)
+        plus_di = talib.PLUS_DI(market_data.high.values,
+                                market_data.low.values,
+                                market_data.close.values)
+        min_di = talib.MINUS_DI(market_data.high.values,
+                                market_data.low.values,
+                                market_data.close.values)
+        if plus_di[i] - min_di[i] > 5:
+            upper_spread = upper[i] - middle[i]
+            return round(upper[i] + (upper_spread * self.proximity), 2)
+        else:
+            lower_spread = middle[i] - lower[i]
+            return round(middle[i] - (lower_spread * self.proximity), 2)
+
+class BasicBbandsStrategy(Strategy):
+    #if trending up, buy near middle, sell near upper
+    #if tending down buy near lower, sell near middle
+    # 'near' is 5% of the difference between either upper/middle or middle/lower
     def __init__(self, proximity=.05):
         self.proximity = proximity
 
     def enter(self, market_data, ticker):
         i = len(market_data) - 1
-        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3)
-        plus_di = talib.PLUS_DI(market_data.high.values,
-                                market_data.low.values,
-                                market_data.close.values)
-        min_di = talib.MINUS_DI(market_data.high.values,
-                                market_data.low.values,
-                                market_data.close.values)
-        if plus_di[i] >= min_di[i]:
-            upper_spread = upper[i] - middle[i]
-            return round(middle[i] + (upper_spread * self.proximity),2)
-        else:
-            lower_spread = middle[i] - lower[i]
-            return round(lower[i] + (lower_spread * self.proximity),2)
+        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3, timeperiod=20, nbdevup=2, nbdevdn=2)
+        lower_spread = middle[i] - lower[i]
+        return round(lower[i] + (lower_spread * self.proximity), 2)
 
     def exit(self, market_data, ticker):
         i = len(market_data) - 1
-        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3)
-        plus_di = talib.PLUS_DI(market_data.high.values,
-                                market_data.low.values,
-                                market_data.close.values)
-        min_di = talib.MINUS_DI(market_data.high.values,
-                                market_data.low.values,
-                                market_data.close.values)
-        if plus_di[i] >= min_di[i]:
-            upper_spread = upper[i] - middle[i]
-            return round(upper[i] - (upper_spread * self.proximity), 2)
-        else:
-            lower_spread = middle[i] - lower[i]
-            return round(middle[i] - (lower_spread * self.proximity),2)
-
+        upper, middle, lower = talib.BBANDS(market_data.close.values, matype=MA_Type.T3, timeperiod=20, nbdevup=2, nbdevdn=2)
+        upper_spread = upper[i] - middle[i]
+        return round(upper[i] - (upper_spread * self.proximity), 2)
