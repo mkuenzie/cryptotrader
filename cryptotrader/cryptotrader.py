@@ -151,8 +151,8 @@ class Cryptotrader(object):
         else:
             markdown_text += '- %.2f\n\n' % ((1 - (wallet / initial_wallet)) * 100)
         markdown_text += "### Trades \n\n"
-        markdown_text += "| Buy Date | Buy @ Price | Sell Date | Sell @ Price | Start/End Amount | Gain/Loss |\n\n"
-        markdown_text += "| :------------- | :----------: | -----------: | :------------- | :----------: | -----------: |\n\n"
+        markdown_text += "| Buy Date | Buy @ Price | Sell Date | Sell @ Price | Start/End Amount | Gain/Loss |\n"
+        markdown_text += "| :------------- | :----------: | -----------: | :------------- | :----------: | -----------: |\n"
         for i in range(0, total - 1, 2):
             buy = trades[i]
             sell = trades[i + 1]
@@ -162,17 +162,17 @@ class Cryptotrader(object):
             sell_amnt = sell['amount']
             buy_value = round(buy_price * buy_amnt, 2)
             sell_value = round(sell_price * sell_amnt, 2)
-            buy_ts = buy['timestamp'].strftime("%m/%/%Y %H:%M:%S")
-            sell_ts = sell['timestamp'].strftime("%m/%/%Y %H:%M:%S")
+            buy_ts = buy['timestamp'].strftime("%m\-%d\-%Y %H:%M:%S")
+            sell_ts = sell['timestamp'].strftime("%m\-%d\-%Y %H:%M:%S")
             markdown_text += "| " + buy_ts + " | " + str(buy_amnt) + '@' + str(buy_price) + " | " \
                              + sell_ts + " | " + str(sell_amnt) + ' @ ' + str(sell_price) + " | " \
                              + str(buy_value) + '/' + str(sell_value) + " | "
             if buy_price <= sell_price:
                 gain = ((sell_price / buy_price) - 1) * 100
-                markdown_text += ("+ %.2f" % gain) + " |\n\n"
+                markdown_text += ("+ %.2f" % gain) + " |\n"
             else:
                 loss = (1 - (sell_price / buy_price)) * 100
-                markdown_text += ('- %.2f' % loss) + " |\n\n"
+                markdown_text += ('- %.2f' % loss) + " |\n"
         return markdown_text
 
 #
