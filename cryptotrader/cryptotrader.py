@@ -162,8 +162,10 @@ class Cryptotrader(object):
             sell_amnt = sell['amount']
             buy_value = round(buy_price * buy_amnt, 2)
             sell_value = round(sell_price * sell_amnt, 2)
-            markdown_text += "| " + str(buy['timestamp']) + " | " + str(buy_amnt) + '@' + str(buy_price) + " | " \
-                             + str(sell['timestamp']) + " | " + str(sell_amnt) + ' @ ' + str(sell_price) + " | " \
+            buy_ts = buy['timestamp'].strftime("%m/%/%Y %H:%M:%S")
+            sell_ts = sell['timestamp'].strftime("%m/%/%Y %H:%M:%S")
+            markdown_text += "| " + buy_ts + " | " + str(buy_amnt) + '@' + str(buy_price) + " | " \
+                             + sell_ts + " | " + str(sell_amnt) + ' @ ' + str(sell_price) + " | " \
                              + str(buy_value) + '/' + str(sell_value) + " | "
             if buy_price <= sell_price:
                 gain = ((sell_price / buy_price) - 1) * 100
