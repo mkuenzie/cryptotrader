@@ -141,7 +141,7 @@ class Cryptotrader(object):
         markdown_text = "# Cryptotrader Stats\n\n"
         markdown_text += "Initial Wallet: $" + str(initial_wallet) + "\n\n"
         if usd_wallet == 0:
-            wallet = round(crypto_wallet * self.exchange.get_ticker(), 2)
+            wallet = round(crypto_wallet * self.get_ticker(), 2)
         else:
             wallet = round(usd_wallet, 2)
         markdown_text += "Current Wallet: $" + str(wallet) + "\n\n"
