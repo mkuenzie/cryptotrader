@@ -139,7 +139,7 @@ class Cryptotrader(object):
     def generate_markdown(self, trades, initial_wallet, usd_wallet, crypto_wallet):
         total = len(trades)
         markdown_text = "# Cryptotrader Stats\n\n"
-        markdown_text += "Initial Wallet: $" + str(initial_wallet) + "\n"
+        markdown_text += "Initial Wallet: $" + str(initial_wallet) + "\n\n"
         if usd_wallet == 0:
             wallet = round(crypto_wallet * self.exchange.get_ticker(), 2)
         else:
@@ -147,12 +147,12 @@ class Cryptotrader(object):
         markdown_text += "Current Wallet: $" + str(wallet) + "\n\n"
         markdown_text += "Gain/Loss: "
         if wallet >= initial_wallet:
-            markdown_text += '+ %.2f\n' % (((wallet / initial_wallet) - 1) * 100)
+            markdown_text += '+ %.2f\n\n' % (((wallet / initial_wallet) - 1) * 100)
         else:
-            markdown_text += '- %.2f\n' % ((1 - (wallet / initial_wallet)) * 100)
-        markdown_text += "### Trades \n"
-        markdown_text += "| Buy Date | Buy @ Price | Sell Date | Sell @ Price | Start/End Amount | Gain/Loss |\n"
-        markdown_text += "| :------------- | :----------: | -----------: | :------------- | :----------: | -----------: |"
+            markdown_text += '- %.2f\n\n' % ((1 - (wallet / initial_wallet)) * 100)
+        markdown_text += "### Trades \n\n"
+        markdown_text += "| Buy Date | Buy @ Price | Sell Date | Sell @ Price | Start/End Amount | Gain/Loss |\n\n"
+        markdown_text += "| :------------- | :----------: | -----------: | :------------- | :----------: | -----------: |\n\n"
         for i in range(0, total - 1, 2):
             buy = trades[i]
             sell = trades[i + 1]
@@ -167,10 +167,10 @@ class Cryptotrader(object):
                              + str(buy_value) + '/' + str(sell_value) + " | "
             if buy_price <= sell_price:
                 gain = ((sell_price / buy_price) - 1) * 100
-                markdown_text += ("+ %.2f" % gain) + " |\n"
+                markdown_text += ("+ %.2f" % gain) + " |\n\n"
             else:
                 loss = (1 - (sell_price / buy_price)) * 100
-                markdown_text += ('- %.2f' % loss) + " |\n"
+                markdown_text += ('- %.2f' % loss) + " |\n\n"
         return markdown_text
 
 #
