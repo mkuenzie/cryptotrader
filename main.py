@@ -5,8 +5,8 @@ import daemon
 from csv import DictWriter
 import time
 
-initial_wallet = 50
-usd_wallet = 54.83
+initial_wallet = 150
+usd_wallet = 151.50713851
 crypto_wallet = 0
 trades = []
 action = 'BUY'
@@ -23,8 +23,8 @@ def write_markdown(trades, initial_wallet, usd_wallet, crypto_wallet):
 
 
 def trade():
-    session_start = datetime.utcnow()
     while True:
+        session_start = datetime.utcnow()
         global usd_wallet, crypto_wallet, action
         refresh_success = trader.refresh()
         if refresh_success:
@@ -45,7 +45,7 @@ def trade():
                 fill_quantity = float(order['fillQuantity'])
                 proceeds = float(order['proceeds'])
                 fee = float(order['commission'])
-                price = round(proceeds / fill_quantity, 2)
+                price = round(proceeds / fill_quantity, 8)
                 trade = {
                     'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
                     'action': action,
@@ -64,7 +64,7 @@ def trade():
                 fill_quantity = float(order['fillQuantity'])
                 proceeds = float(order['proceeds'])
                 fee = float(order['commission'])
-                price = round(proceeds / fill_quantity, 2)
+                price = round(proceeds / fill_quantity, 8)
                 trade = {
                     'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
                     'action': action,
@@ -74,12 +74,12 @@ def trade():
                 }
                 print(trade)
                 trades.append(trade)
-                usd_wallet = fill_quantity
+                usd_wallet = fill_quantity - fee
                 crypto_wallet = 0
                 action = 'BUY'
             write_markdown(trades, initial_wallet, usd_wallet, crypto_wallet)
             new_trades = [d for d in trades if d['timestamp'] > session_start]
-            if len(trades) > 0:
+            if len(new_trades) > 0:
                 trader.write_csv(new_trades, 'trades.csv', append=True)
         print("Wait 1 min...")
         time.sleep(60)

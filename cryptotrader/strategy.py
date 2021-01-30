@@ -163,15 +163,17 @@ class BbandsStrategy3(Strategy):
         lower_spread = middle[i] - lower[i]
         low_proximity_mod = self.proximity + (min_di[i]/1000)
         low_enter_price = round(lower[i] - (lower_spread * low_proximity_mod), 2)
-        if abs(plus_di[i] - min_di[i]) <= 10:
+        if plus_di[i] - min_di[i] > 10:
+            return min(up_enter_price, ticker)
+        elif min_di[i] - plus_di[i] > 10:
+            return min(low_enter_price, ticker)
+        elif abs(plus_di[i] - min_di[i]) <= 10:
             plus_slope = slope(1, plus_di[i-1], 2, plus_di[i])
             min_slope = slope(1, min_di[i-1], 2, min_di[i])
-            if plus_slope - min_slope > 0:
+            if plus_slope - min_slope > 1:
                 return min(up_enter_price, ticker)
             else:
                 return min(low_enter_price, ticker)
-        elif plus_di[i] - min_di[i] > 10:
-            return min(up_enter_price, ticker)
         else:
             return min(low_enter_price, ticker)
 
@@ -191,14 +193,16 @@ class BbandsStrategy3(Strategy):
         lower_spread = middle[i] - lower[i]
         low_proximity_mod = self.proximity + (min_di[i] / 1000)
         low_exit_price = round(middle[i] - (lower_spread * low_proximity_mod), 2)
-        if abs(plus_di[i] - min_di[i]) <= 10:
+        if plus_di[i] - min_di[i] > 10:
+            return max(up_exit_price, ticker)
+        elif min_di[i] - plus_di[i] > 10:
+            return max(low_exit_price, ticker)
+        elif abs(plus_di[i] - min_di[i]) <= 10:
             plus_slope = slope(1, plus_di[i - 1], 2, plus_di[i])
             min_slope = slope(1, min_di[i - 1], 2, min_di[i])
-            if plus_slope - min_slope > 0:
+            if plus_slope - min_slope > 1:
                 return max(up_exit_price, ticker)
             else:
                 return max(low_exit_price, ticker)
-        elif plus_di[i] - min_di[i] > 10:
-            return max(up_exit_price, ticker)
         else:
             return max(low_exit_price, ticker)

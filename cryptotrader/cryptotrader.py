@@ -71,8 +71,8 @@ class Cryptotrader(object):
             if curr_action == 'BUY':
                 buy_price = self.strategy.enter(sliced_data, tick_data.close.item())
                 if tick_low <= buy_price <= tick_high:
-                    crypto_wallet = round(usd_wallet / buy_price, 6)
-                    commission = round(usd_wallet * self.fee, 2)
+                    crypto_wallet = round(usd_wallet / buy_price, 8)
+                    commission = round(usd_wallet * self.fee, 8)
                     usd_wallet = 0
                     trades.append({'timestamp': curr_tick, 'action': curr_action,
                                    'price': buy_price, 'amount': crypto_wallet, 'fee': commission})
@@ -80,10 +80,10 @@ class Cryptotrader(object):
             else:
                 sell_price = self.strategy.exit(sliced_data, tick_data.close.item())
                 if tick_low <= sell_price <= tick_high:
-                    commission = round(crypto_wallet * sell_price * self.fee, 2)
+                    commission = round(crypto_wallet * sell_price * self.fee, 8)
                     trades.append({'timestamp': curr_tick, 'action': curr_action,
                                    'price': sell_price, 'amount': crypto_wallet, 'fee': commission})
-                    usd_wallet = round(crypto_wallet * sell_price, 2)
+                    usd_wallet = round(crypto_wallet * sell_price, 8)
                     crypto_wallet = 0
                     curr_action = 'BUY'
             curr_tick = curr_tick + self.interval
@@ -141,9 +141,9 @@ class Cryptotrader(object):
         markdown_text = "# Cryptotrader Stats\n\n"
         markdown_text += "Initial Wallet: $" + str(initial_wallet) + "\n\n"
         if usd_wallet == 0:
-            wallet = round(crypto_wallet * self.get_ticker(), 2)
+            wallet = round(crypto_wallet * self.get_ticker(), 8)
         else:
-            wallet = round(usd_wallet, 2)
+            wallet = round(usd_wallet, 8)
         markdown_text += "Current Wallet: $" + str(wallet) + "\n\n"
         markdown_text += "Gain/Loss: "
         if wallet >= initial_wallet:
@@ -160,8 +160,9 @@ class Cryptotrader(object):
             buy_amnt = buy['amount']
             sell_price = sell['price']
             sell_amnt = sell['amount']
-            buy_value = round(buy_price * buy_amnt, 2)
-            sell_value = round(sell_price * sell_amnt, 2)
+            sell_fee = sell['fee']
+            buy_value = round(buy_price * buy_amnt, 8)
+            sell_value = round(sell_price * sell_amnt, 8) - sell_fee
             buy_ts = buy['timestamp'].strftime("%m\-%d\-%Y %H:%M:%S")
             sell_ts = sell['timestamp'].strftime("%m\-%d\-%Y %H:%M:%S")
             markdown_text += "| " + buy_ts + " | " + str(buy_amnt) + '@' + str(buy_price) + " | " \
