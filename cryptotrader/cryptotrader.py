@@ -3,7 +3,23 @@ from csv import DictWriter, DictReader
 
 import pandas as pd
 from bittrex.bittrex import Bittrex, CandleInterval
+from bittrex import websocket
 from datetime import datetime, timedelta
+
+
+def _data2frame(rawdata):
+    data = {}
+    for m_datum in rawdata:
+        for key in m_datum.keys():
+            if key not in data.keys():
+                data[key] = []
+            if key == 'startsAt':
+                data[key].append(datetime.strptime(m_datum[key], '%Y-%m-%dT%H:%M:%SZ'))
+            else:
+                data[key].append(float(m_datum[key]))
+    df = pd.DataFrame(data=data, columns=data.keys())
+    df = df.set_index('startsAt')
+    return df
 
 
 class Cryptotrader(object):
@@ -12,6 +28,7 @@ class Cryptotrader(object):
         self.exchange = Bittrex(api_key=os.environ.get("BITTREX_API_KEY"),
                                 api_secret=os.environ.get("BITTREX_API_SECRET"))
         self.market = market
+        self.market_sequence = 0
         self.market_data = pd.DataFrame()
         self.market_start = datetime.now()
         self.strategy = strategy
@@ -19,7 +36,30 @@ class Cryptotrader(object):
         self.interval = interval
         self.action = action
         self.fee = fee
-        self.refresh()
+
+    async def update_candles(self, msg):
+        sequence = msg['sequence']
+        if sequence >= self.market_sequence:
+            self.market_sequence = sequence
+            delta = msg['delta']
+            start = datetime.strptime(delta['startsAt'], '%Y-%m-%dT%H:%M:%SZ')
+            df_raw = {
+                'startsAt': [start]
+            }
+            for k in delta.keys():
+                if k != 'startsAt':
+                    df_raw[k] = [float(delta[k])]
+            df = pd.DataFrame(data=df_raw, columns=df_raw.keys())
+            df = df.set_index('startsAt')
+            existing_f = self.market_data.loc[start]
+            if existing_f.empty:
+                self.market_data = self.market_data.append(df, ignore_index=True)
+            else:
+                self.market_data.update(df)
+
+    async def update_ticker(self, msg):
+        self.ticker = msg
+
 
     def get_ticker(self):
         return float((self.ticker['lastTradeRate']))
@@ -31,20 +71,11 @@ class Cryptotrader(object):
             print("Failed to refresh, exchange is unavailable.")
             return False
         self.ticker = self.exchange.markets_ticker(self.market)
-        market_data = self.exchange.markets_candle(self.market, self.interval)
+        response = self.exchange.markets_candle(self.market, self.interval)
+        self.market_sequence = response['sequence']
+        market_data = response['data']
         self.market_start = datetime.strptime((market_data[0])['startsAt'], '%Y-%m-%dT%H:%M:%SZ')
-        data = {}
-        for m_datum in market_data:
-            if m_datum['startsAt'] not in self.market_data.index:
-                for key in m_datum.keys():
-                    if key not in data.keys():
-                        data[key] = []
-                    if key == 'startsAt':
-                        data[key].append(datetime.strptime(m_datum[key], '%Y-%m-%dT%H:%M:%SZ'))
-                    else:
-                        data[key].append(float(m_datum[key]))
-        df = pd.DataFrame(data=data)
-        self.market_data = self.market_data.append(df)
+        self.market_data = _data2frame(market_data)
         return True
 
     def eval(self):
@@ -52,20 +83,76 @@ class Cryptotrader(object):
         sell_price = self.strategy.exit(self.market_data, self.get_ticker())
         return {'BUY': buy_price, 'SELL': sell_price}
 
-    def test(self, start_at=''):
+    def test2(self, start_at):
+        usd_wallet = 100
+        crypto_wallet = 0
+        signal_data = self.market_data
+        steps = len(signal_data.index)
+        if start_at == '':
+            start = 30
+            steps = len(signal_data.index)
+            curr_tick = signal_data.head(1).index.item() + (30 * self.interval)
+        else:
+            d = signal_data.loc[signal_data.index >= start_at]
+            start = 0
+            steps = len(d.index)
+            curr_tick = d.head(1).index.item()
+        next_tick = curr_tick + self.interval
+        tick_data = _data2frame(self.exchange.markets_candle_history(self.market, curr_tick))
+        curr_action = 'BUY'
+        trades = []
+        for i in range(start, steps):
+            if curr_tick not in tick_data.index:
+                try:
+                    tick_data = tick_data.append(_data2frame(self.exchange.markets_candle_history(self.market, curr_tick)))
+                except Exception:
+                    d = self.exchange.markets_candle(self.market)
+                    tick_data = tick_data.append(_data2frame(d['data']))
+            sliced_data = signal_data.loc[signal_data.index <= curr_tick]
+            sliced_tick_data = tick_data.loc[(tick_data.index >= curr_tick) & (tick_data.index < next_tick)]
+            for tick in sliced_tick_data.index:
+                tick_close = sliced_tick_data.loc[sliced_tick_data.index == tick].close.item()
+                tick_high = sliced_tick_data.loc[sliced_tick_data.index == tick].high.item()
+                tick_low = sliced_tick_data.loc[sliced_tick_data.index == tick].low.item()
+                sliced_data.loc[curr_tick]['high'] = tick_high
+                sliced_data.loc[curr_tick]['close'] = tick_close
+                sliced_data.loc[curr_tick]['low'] = tick_low
+                if curr_action == 'BUY':
+                    buy_price = self.strategy.enter(sliced_data, tick_high)
+                    if tick_low <= buy_price <= tick_high:
+                        crypto_wallet = round(usd_wallet / buy_price, 8)
+                        commission = round(usd_wallet * self.fee, 8)
+                        usd_wallet = 0
+                        trades.append({'timestamp': tick, 'action': curr_action,
+                                       'price': buy_price, 'amount': crypto_wallet, 'fee': commission})
+                        curr_action = 'SELL'
+                else:
+                    sell_price = self.strategy.exit(sliced_data, tick_high)
+                    if tick_low <= sell_price <= tick_high:
+                        commission = round(crypto_wallet * sell_price * self.fee, 8)
+                        trades.append({'timestamp': tick, 'action': curr_action,
+                                       'price': sell_price, 'amount': crypto_wallet, 'fee': commission})
+                        usd_wallet = round(crypto_wallet * sell_price, 8)
+                        crypto_wallet = 0
+                        curr_action = 'BUY'
+            curr_tick = curr_tick + self.interval
+            next_tick = curr_tick + self.interval
+        return trades
+
+    def test(self, days=30, start_at=''):
         usd_wallet = 100
         crypto_wallet = 0
         if start_at == '':
             test_data = self.market_data
         else:
-            test_data = self.market_data.loc[self.market_data.startsAt >= start_at]
+            test_data = self.market_data[self.market_data.index >= start_at]
         steps = len(test_data.index)
-        curr_tick = test_data.head(1).startsAt.item() + (30 * self.interval)
+        curr_tick = test_data.head(1).index.item() + (30 * self.interval)
         curr_action = 'BUY'
         trades = []
         for i in range(30, steps):
-            sliced_data = test_data.loc[test_data.startsAt <= curr_tick]
-            tick_data = test_data.loc[test_data.startsAt == curr_tick]
+            sliced_data = test_data.loc[test_data.index <= curr_tick]
+            tick_data = test_data.loc[test_data.index == curr_tick]
             tick_high = tick_data.high.item()
             tick_low = tick_data.low.item()
             if curr_action == 'BUY':
@@ -158,6 +245,7 @@ class Cryptotrader(object):
             sell = trades[i + 1]
             buy_price = buy['price']
             buy_amnt = buy['amount']
+            buy_fee = buy['fee']
             sell_price = sell['price']
             sell_amnt = sell['amount']
             sell_fee = sell['fee']
@@ -176,4 +264,16 @@ class Cryptotrader(object):
                 markdown_text += ('- %.2f' % loss) + " |\n"
         return markdown_text
 
-#
+    def get_action(self, trades):
+        cnt = len(trades)
+        last_trade = trades[cnt - 1]
+        last_action = last_trade['action']
+        if last_action == 'BUY':
+            return 'SELL'
+        elif last_action == 'SELL':
+            return 'BUY'
+        else:
+            raise ValueError("Invalid action in trades")
+
+
+
