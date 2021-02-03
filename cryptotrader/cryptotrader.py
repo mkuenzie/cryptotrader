@@ -7,6 +7,20 @@ from bittrex import websocket
 from datetime import datetime, timedelta
 
 
+def _interval2max(interval):
+    min_1 = timedelta(minutes=1)
+    min_5 = timedelta(minutes=5)
+    hour_1 = timedelta(hours=1)
+    day_1 = timedelta(days=1)
+    if interval == min_1:
+        return 1440
+    if interval == min_5:
+        return 288
+    if interval == hour_1:
+        return 1440
+    if interval == day_1:
+        return 366
+
 def _data2frame(rawdata):
     data = {}
     for m_datum in rawdata:
@@ -51,9 +65,9 @@ class Cryptotrader(object):
                     df_raw[k] = [float(delta[k])]
             df = pd.DataFrame(data=df_raw, columns=df_raw.keys())
             df = df.set_index('startsAt')
-            existing_f = self.market_data.loc[start]
+            existing_f = self.market_data.loc[self.market_data.index == start]
             if existing_f.empty:
-                self.market_data = self.market_data.append(df, ignore_index=True)
+                self.market_data = self.market_data.append(df)
             else:
                 self.market_data.update(df)
 
@@ -78,34 +92,45 @@ class Cryptotrader(object):
         self.market_data = _data2frame(market_data)
         return True
 
-    def eval(self):
-        buy_price = self.strategy.enter(self.market_data, self.get_ticker())
-        sell_price = self.strategy.exit(self.market_data, self.get_ticker())
+    def eval(self, bought_at=0):
+        buy_price = self.strategy.enter(self.market_data, self.get_ticker(), datetime.utcnow())
+        sell_price = self.strategy.exit(self.market_data, self.get_ticker(), datetime.utcnow(), bought_at)
         return {'BUY': buy_price, 'SELL': sell_price}
 
-    def test2(self, start_at):
+    def backtest(self, start_at=''):
         usd_wallet = 100
         crypto_wallet = 0
         signal_data = self.market_data
-        steps = len(signal_data.index)
+
         if start_at == '':
             start = 30
             steps = len(signal_data.index)
             curr_tick = signal_data.head(1).index.item() + (30 * self.interval)
         else:
+            check = start_at
+            #Append earlier data from same day
+            today = datetime(self.market_start.year, self.market_start.month, self.market_start.day, 0, 0)
+            signal_data = signal_data.append(_data2frame( \
+                self.exchange.markets_candle_history(self.market, today, self.interval)))
+            while check not in signal_data.index:
+                signal_data = signal_data.append(_data2frame(\
+                    self.exchange.markets_candle_history(self.market, check, self.interval)))
+                check = check + self.interval * _interval2max(self.interval)
+            signal_data.sort_index(inplace=True)
             d = signal_data.loc[signal_data.index >= start_at]
             start = 0
-            steps = len(d.index)
+            steps = len(d.index) - 1
             curr_tick = d.head(1).index.item()
         next_tick = curr_tick + self.interval
         tick_data = _data2frame(self.exchange.markets_candle_history(self.market, curr_tick))
         curr_action = 'BUY'
         trades = []
+        bought_at = 0
         for i in range(start, steps):
             if curr_tick not in tick_data.index:
-                try:
+                if curr_tick <= today:
                     tick_data = tick_data.append(_data2frame(self.exchange.markets_candle_history(self.market, curr_tick)))
-                except Exception:
+                else:
                     d = self.exchange.markets_candle(self.market)
                     tick_data = tick_data.append(_data2frame(d['data']))
             sliced_data = signal_data.loc[signal_data.index <= curr_tick]
@@ -118,16 +143,17 @@ class Cryptotrader(object):
                 sliced_data.loc[curr_tick]['close'] = tick_close
                 sliced_data.loc[curr_tick]['low'] = tick_low
                 if curr_action == 'BUY':
-                    buy_price = self.strategy.enter(sliced_data, tick_high)
+                    buy_price = self.strategy.enter(sliced_data, tick_close, tick)
                     if tick_low <= buy_price <= tick_high:
                         crypto_wallet = round(usd_wallet / buy_price, 8)
                         commission = round(usd_wallet * self.fee, 8)
                         usd_wallet = 0
+                        bought_at =buy_price
                         trades.append({'timestamp': tick, 'action': curr_action,
                                        'price': buy_price, 'amount': crypto_wallet, 'fee': commission})
                         curr_action = 'SELL'
                 else:
-                    sell_price = self.strategy.exit(sliced_data, tick_high)
+                    sell_price = self.strategy.exit(sliced_data, tick_close, tick, bought_at)
                     if tick_low <= sell_price <= tick_high:
                         commission = round(crypto_wallet * sell_price * self.fee, 8)
                         trades.append({'timestamp': tick, 'action': curr_action,

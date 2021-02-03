@@ -1,6 +1,7 @@
 import asyncio
 from cryptotrader.cryptotrader import Cryptotrader
 from cryptotrader.strategy import BbandsStrategy, BbandsDIStrategy
+from cryptotrader.ChangeStrategy import ChangeStrategy
 from datetime import timedelta, datetime
 from bittrex import websocket
 from bittrex.bittrex import CandleInterval
@@ -11,7 +12,7 @@ initial_wallet = 150
 LOCK = asyncio.Lock()
 
 def write_markdown(markdown):
-    f = open('cryptotrader/readme.md', 'w')
+    f = open('readme.md', 'w')
     f.write(markdown)
     f.close()
 
@@ -31,14 +32,18 @@ async def on_candle(msg):
 
 
 async def main():
-    global action, trades, market, trader, usd_wallet, crypto_wallet
-    usd_wallet = 147.4539334
-    crypto_wallet = 0
+    global action, trades, market, trader, usd_wallet, crypto_wallet, buy_at
+    buy_at = 35995.19799757
+    usd_wallet = 0
+    crypto_wallet = 0.00411899
     market = 'BTC-USD'
-    interval = CandleInterval(timedelta(hours=1))
+    #interval = CandleInterval(timedelta(hours=1))
 
-    trader = Cryptotrader(market=market, strategy=BbandsStrategy(proximity=0.25, stddevs=2), fee=0.0035,
-                          interval=timedelta(hours=1))
+    #trader = Cryptotrader(market=market, strategy=BbandsStrategy(proximity=0.25, stddevs=2), fee=0.0035,
+    #                      interval=timedelta(hours=1))
+    interval = CandleInterval(timedelta(minutes=5))
+    trader = Cryptotrader(market='BTC-USD', strategy=ChangeStrategy(period=timedelta(minutes=30)),
+                          fee=0.0035, interval=timedelta(minutes=5))
     trader.refresh()
     trades = trader.read_csv('trades.csv')
     action = trader.get_action(trades)
@@ -56,12 +61,12 @@ async def main():
 
 
 async def trade():
-    global action, usd_wallet, crypto_wallet, trader, trades, active_session
+    global action, usd_wallet, crypto_wallet, trader, trades, active_session, buy_at
     session_start = datetime.utcnow()
     active_session = True
     ticker = trader.get_ticker()
     action = trader.get_action(trades)
-    plan = trader.eval()
+    plan = trader.eval(bought_at=buy_at)
     now = datetime.now()
     os.system('clear')
     print("---------" + str(now) + "------------")
@@ -79,6 +84,7 @@ async def trade():
         proceeds = float(order['proceeds'])
         fee = float(order['commission'])
         price = round(proceeds / fill_quantity, 8)
+        buy_at = price
         trade = {
             'timestamp': datetime.strptime(order['closedAt'], '%Y-%m-%dT%H:%M:%S.%fZ'),
             'action': action,
